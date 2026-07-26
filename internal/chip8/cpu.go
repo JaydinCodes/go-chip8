@@ -10,8 +10,8 @@ const (
 	MemorySize   = 4096
 	ProgramStart = 0x200
 
-	ScreenWidth  = 64
-	ScreenHeight = 32
+	ScreenWidth  = 128
+	ScreenHeight = 64
 
 	screenWidth  = ScreenWidth
 	screenHeight = ScreenHeight
