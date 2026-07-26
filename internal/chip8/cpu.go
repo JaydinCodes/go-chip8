@@ -51,10 +51,10 @@ type CPU struct {
 	Quirks Quirks
 }
 
-func New() *CPU {
+func NewWithQuirks(q Quirks) *CPU {
 	cpu := &CPU{
 		PC:     ProgramStart,
-		Quirks: NewVIPProfile(),
+		Quirks: q,
 		Hires:  false,
 	}
 
@@ -63,6 +63,9 @@ func New() *CPU {
 	return cpu
 }
 
+func New() *CPU {
+	return NewWithQuirks(NewSuperChipProfile())
+}
 func (c *CPU) LoadProgram(program []byte) error {
 	if len(program) > MemorySize-ProgramStart {
 		return fmt.Errorf("program size exceeds available memory: %d", len(program))
