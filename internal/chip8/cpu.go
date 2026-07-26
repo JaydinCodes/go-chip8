@@ -10,11 +10,11 @@ const (
 	MemorySize   = 4096
 	ProgramStart = 0x200
 
-	ScreenWidth  = 128
-	ScreenHeight = 64
+	MaxScreenWidth  = 128
+	MaxScreenHeight = 64
 
-	screenWidth  = ScreenWidth
-	screenHeight = ScreenHeight
+	LowScreenWidth  = 64
+	LowScreenHeight = 32
 )
 
 type Quirks struct {
@@ -37,8 +37,8 @@ type CPU struct {
 	Stack [16]uint16 // Stack for subroutine calls
 	SP    byte       // Stack pointer
 
-	Display      [screenWidth * screenHeight]bool //
-	DisplayDirty bool
+	Hires  bool
+	pixels [MaxScreenWidth * MaxScreenHeight]bool
 
 	DelayTimer byte
 	SoundTimer byte
@@ -55,6 +55,7 @@ func New() *CPU {
 	cpu := &CPU{
 		PC:     ProgramStart,
 		Quirks: NewVIPProfile(),
+		Hires:  false,
 	}
 
 	copy(cpu.Memory[FontStart:], fontSet[:])
@@ -445,12 +446,25 @@ func randomByte() byte {
 }
 
 func (c *CPU) drawSprite(xReg, yReg, height byte) error {
-	if err := c.ensureMemoryRange(c.I, int(height)); err != nil {
+	// In SCHIP hi-res mode, height == 0 means a 16x16 sprite (32 bytes total)
+	spriteHeight := int(height)
+	is16x16 := (height == 0)
+
+	if is16x16 {
+		spriteHeight = 16
+	}
+	// Calculate memory bytes to read: 1 byte per row for 8xN, 2 bytes per row for 16x16
+	bytesToRead := spriteHeight
+	if is16x16 {
+		bytesToRead = 32
+	}
+
+	if err := c.ensureMemoryRange(c.I, bytesToRead); err != nil {
 		return err
 	}
 
-	xPos := int(c.V[xReg]) % screenWidth
-	yPos := int(c.V[yReg]) % screenHeight
+	xPos := int(c.V[xReg]) % c.DisplayWidth()
+	yPos := int(c.V[yReg]) % c.DisplayHeight()
 
 	c.V[0xF] = 0
 
@@ -493,6 +507,24 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 	}
 
 	return nil
+}
+
+func (c *CPU) DisplayWidth() int {
+	if c.Hires {
+		return MaxScreenWidth
+	}
+	return LowScreenWidth
+}
+
+func (c *CPU) DisplayHeight() int {
+	if c.Hires {
+		return MaxScreenHeight
+	}
+	return LowScreenHeight
+}
+
+func (c *CPU) pixelIndex(x, y int) int {
+	return x + (y * MaxScreenWidth)
 }
 
 func (c *CPU) UpdateTimers() {
