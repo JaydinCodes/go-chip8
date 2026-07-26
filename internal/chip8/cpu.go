@@ -463,46 +463,61 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 		return err
 	}
 
-	xPos := int(c.V[xReg]) % c.DisplayWidth()
-	yPos := int(c.V[yReg]) % c.DisplayHeight()
+	displayWidth := c.DisplayWidth()
+	displayHeight := c.DisplayHeight()
+
+	xPos := int(c.V[xReg]) % displayWidth
+	yPos := int(c.V[yReg]) % displayHeight
 
 	c.V[0xF] = 0
 
-	for row := 0; row < int(height); row++ {
-		spriteByte := c.Memory[(c.I + uint16(row))] //
+	for row := 0; row < spriteHeight; row++ {
 		y := (yPos + row)
-		if y >= screenHeight {
+		if y >= displayHeight {
 			if c.Quirks.WrapSprites {
-				y = y % screenHeight
+				y = y % displayHeight
 			} else {
 				break
 			}
 		}
-		for col := 0; col < 8; col++ {
-			spritePixel := spriteByte & (0x80 >> col)
+		// Handle width: 16 pixels if height == 0, otherwise standard 8 pixels
+		pixelWidth := 8
+		if is16x16 {
+			pixelWidth = 16
+		}
+		for col := 0; col < pixelWidth; col++ {
+			// Fetch sprite byte: 16x16 mode uses 2 consecutive bytes per row
+			var spriteByte byte
+			if is16x16 {
+				memOffset := c.I + uint16(row*2+(col/8))
+				spriteByte = c.Memory[memOffset]
+			} else {
+				spriteByte = c.Memory[c.I+uint16(row)]
+			}
+			// Check bit state (col%8 handles second byte in 16-px mode)
+			spritePixel := spriteByte & (0x80 >> (col % 8))
 			if spritePixel == 0 {
 				continue
 			}
 
 			x := (xPos + col)
-			if x >= screenWidth {
+			if x >= displayWidth {
 				if c.Quirks.WrapSprites {
-					x = x % screenWidth
+					x = x % displayWidth
 				} else {
 					continue
 				}
 			}
+			// CRITICAL: Stride is ALWAYS 128 because c.Display is a fixed 128x64 array!
+			const backingWidth = 128
+			index := y*backingWidth + x
 
-			index := y*screenWidth + x
-
-			if c.Display[index] {
+			if c.pixels[index] {
 				c.V[0xF] = 1
 			}
 
-			c.Display[index] = !c.Display[index]
+			c.pixels[index] = !c.pixels[index]
 		}
-
-		c.DisplayDirty = true
 
 	}
 
