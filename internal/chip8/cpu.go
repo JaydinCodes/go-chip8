@@ -428,11 +428,9 @@ func (c *CPU) ret() error {
 }
 
 func (c *CPU) clearScreen() {
-	for i := range c.Display {
-		c.Display[i] = false
+	for i := range c.pixels {
+		c.pixels[i] = false
 	}
-
-	c.DisplayDirty = true
 }
 
 func randomByte() byte {
