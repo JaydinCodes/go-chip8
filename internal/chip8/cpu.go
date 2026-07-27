@@ -30,6 +30,7 @@ type CPU struct {
 	Memory [MemorySize]byte // 4K memory
 
 	V [16]byte // 16 registers (V0 to VF)
+	R [8]byte  // 8 RPL flag registers (SCHIP FX75/FX85)
 
 	I  uint16 // Index register
 	PC uint16 // Program counter
@@ -410,6 +411,28 @@ func (c *CPU) Execute(opcode uint16) error {
 			if c.Quirks.StoreLoadMutatesI {
 				c.I += uint16(count)
 			}
+
+		case 0x75: // FX75: Save V0 through VX (up to V7) into RPL flags R[0]..R[X]
+			limit := x
+			if limit > 7 {
+				limit = 7 // Standard SCHIP caps at 8 flags (V0-V7)
+			}
+
+			for i := 0; i <= int(limit); i++ {
+				c.R[i] = c.V[i]
+			}
+
+			return nil
+		case 0x85: // FX85: Restore V0 through VX (up to V7) from RPL flags R[0]..R[X]
+			limit := x
+			if limit > 7 {
+				limit = 7
+			}
+
+			for i := 0; i <= int(limit); i++ {
+				c.V[i] = c.R[i]
+			}
+
 		default:
 			return fmt.Errorf("unknown 0xF000 opcode: 0x%04X", opcode)
 		}
