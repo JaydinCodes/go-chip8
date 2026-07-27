@@ -61,6 +61,7 @@ func NewWithQuirks(q Quirks) *CPU {
 	}
 
 	copy(cpu.Memory[FontStart:], fontSet[:])
+	copy(cpu.Memory[BigFontStart:], bigFontSet[:])
 
 	return cpu
 }
@@ -360,6 +361,11 @@ func (c *CPU) Execute(opcode uint16) error {
 			// FX29 - set I to location of sprite for digit VX
 			digit := c.V[x] & 0x0F
 			c.I = FontStart + uint16(digit)*5
+
+		case 0x30:
+			digit := c.V[x] & 0xF
+			c.I = uint16(BigFontStart) + uint16(digit)*10
+			return nil
 
 		case 0x33:
 			// store BCD reprsentatoins of VX at I, I+1, I+2
