@@ -475,17 +475,23 @@ func randomByte() byte {
 }
 
 func (c *CPU) drawSprite(xReg, yReg, height byte) error {
-	// In SCHIP hi-res mode, height == 0 means a 16x16 sprite (32 bytes total)
+	// DXY0 means 16x16 sprite ONLY when Hires is enabled.
+	// In standard Lores mode, height == 0 means 0 rows (draw nothing).
+	is16x16 := (height == 0 && c.Hires)
+
 	spriteHeight := int(height)
-	is16x16 := (height == 0)
+	pixelWidth := 8
+	bytesToRead := int(height)
 
 	if is16x16 {
 		spriteHeight = 16
-	}
-	// Calculate memory bytes to read: 1 byte per row for 8xN, 2 bytes per row for 16x16
-	bytesToRead := spriteHeight
-	if is16x16 {
+		pixelWidth = 16
 		bytesToRead = 32
+	}
+
+	// In Lores mode, height == 0 results in bytesToRead == 0 (early exit / no-op)
+	if bytesToRead == 0 {
+		return nil
 	}
 
 	if err := c.ensureMemoryRange(c.I, bytesToRead); err != nil {
@@ -501,7 +507,7 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 	c.V[0xF] = 0
 
 	for row := 0; row < spriteHeight; row++ {
-		y := (yPos + row)
+		y := yPos + row
 		if y >= displayHeight {
 			if c.Quirks.WrapSprites {
 				y = y % displayHeight
@@ -509,27 +515,24 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 				break
 			}
 		}
-		// Handle width: 16 pixels if height == 0, otherwise standard 8 pixels
-		pixelWidth := 8
-		if is16x16 {
-			pixelWidth = 16
-		}
+
 		for col := 0; col < pixelWidth; col++ {
-			// Fetch sprite byte: 16x16 mode uses 2 consecutive bytes per row
+			// Fetch current byte (byte 0 or byte 1 depending on column in 16-px mode)
+			byteIndex := col / 8
 			var spriteByte byte
 			if is16x16 {
-				memOffset := c.I + uint16(row*2+(col/8))
-				spriteByte = c.Memory[memOffset]
+				spriteByte = c.Memory[c.I+uint16(row*2+byteIndex)]
 			} else {
 				spriteByte = c.Memory[c.I+uint16(row)]
 			}
-			// Check bit state (col%8 handles second byte in 16-px mode)
+
+			// Mask the relevant bit (0x80 >> 0..7)
 			spritePixel := spriteByte & (0x80 >> (col % 8))
 			if spritePixel == 0 {
 				continue
 			}
 
-			x := (xPos + col)
+			x := xPos + col
 			if x >= displayWidth {
 				if c.Quirks.WrapSprites {
 					x = x % displayWidth
@@ -537,8 +540,9 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 					continue
 				}
 			}
-			// CRITICAL: Stride is ALWAYS 128 because c.Display is a fixed 128x64 array!
-			const backingWidth = 128
+
+			// Stride is fixed at MaxScreenWidth (128)
+			const backingWidth = MaxScreenWidth
 			index := y*backingWidth + x
 
 			if c.pixels[index] {
@@ -547,12 +551,10 @@ func (c *CPU) drawSprite(xReg, yReg, height byte) error {
 
 			c.pixels[index] = !c.pixels[index]
 		}
-
 	}
 
 	return nil
 }
-
 func (c *CPU) DisplayWidth() int {
 	if c.Hires {
 		return MaxScreenWidth
