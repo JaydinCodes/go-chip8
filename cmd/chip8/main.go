@@ -1,10 +1,10 @@
-// cmd/chip8/main.go
 package main
 
 import (
+	"flag"
+	"fmt"
 	"image/color"
 	"log"
-	"os"
 
 	"github.com/JustTryingToDoBetter/go-chip8/internal/chip8"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -19,8 +19,20 @@ type Game struct {
 	cpu *chip8.CPU
 }
 
-func NewGame(romPath string) (*Game, error) {
-	cpu := chip8.New()
+func NewGame(romPath string, profile string) (*Game, error) {
+	// Select profile quirks
+	var quirks chip8.Quirks
+	switch profile {
+	case "schip", "superchip":
+		quirks = chip8.NewSuperChipProfile()
+	case "vip", "chip8", "default":
+		quirks = chip8.NewVIPProfile()
+	default:
+		return nil, fmt.Errorf("unknown profile: %q (valid options: vip, schip)", profile)
+	}
+
+	cpu := chip8.NewWithQuirks(quirks)
+
 	if err := cpu.LoadROM(romPath); err != nil {
 		return nil, err
 	}
@@ -31,10 +43,19 @@ func NewGame(romPath string) (*Game, error) {
 }
 
 func (g *Game) Update() error {
+	// Clean exit path when CPU encounters a halt signal
+	if g.cpu.Halted {
+		return ebiten.Termination
+	}
+
 	g.syncInput()
 
 	for i := 0; i < cyclesPerTick; i++ {
-		if _, err := g.cpu.Step(); err != nil {
+		if g.cpu.Halted {
+			return ebiten.Termination
+		}
+
+		if err := g.cpu.Step(); err != nil {
 			return err
 		}
 	}
@@ -47,11 +68,15 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
 
-	for y := 0; y < chip8.ScreenHeight; y++ {
-		for x := 0; x < chip8.ScreenWidth; x++ {
-			index := y*chip8.ScreenWidth + x
+	width := g.cpu.DisplayWidth()
+	height := g.cpu.DisplayHeight()
 
-			if g.cpu.Display[index] {
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// CRITICAL: Stride is always MaxScreenWidth (128) for the 128x64 backing array
+			index := y*chip8.MaxScreenWidth + x
+
+			if g.cpu.Pixels()[index] { // Or g.cpu.PixelAt(x, y) if you export a getter
 				screen.Set(x, y, color.White)
 			}
 		}
@@ -59,7 +84,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return chip8.ScreenWidth, chip8.ScreenHeight
+	// Dynamically report logical internal resolution to Ebitengine
+	return g.cpu.DisplayWidth(), g.cpu.DisplayHeight()
 }
 
 func (g *Game) syncInput() {
@@ -94,22 +120,30 @@ func (g *Game) syncInput() {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		log.Fatal("usage: chip8 <rom-path>")
+	profileFlag := flag.String("profile", "vip", "hardware profile quirks (vip, schip)")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 1 {
+		log.Fatal("usage: chip8 [-profile vip|schip] <rom-path>")
 	}
 
-	game, err := NewGame(os.Args[1])
+	romPath := args[0]
+
+	game, err := NewGame(romPath, *profileFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Base window dimensioned to low-res standard scale
 	ebiten.SetWindowSize(
-		chip8.ScreenWidth*windowScale,
-		chip8.ScreenHeight*windowScale,
+		chip8.LowScreenWidth*windowScale,
+		chip8.LowScreenHeight*windowScale,
 	)
 	ebiten.SetWindowTitle("go-chip8")
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
-	if err := ebiten.RunGame(game); err != nil {
+	if err := ebiten.RunGame(game); err != nil && err != ebiten.Termination {
 		log.Fatal(err)
 	}
 }

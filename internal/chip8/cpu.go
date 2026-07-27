@@ -716,3 +716,7 @@ func (c *CPU) scrollLeft() {
 		}
 	}
 }
+
+func (c *CPU) Pixels() *[MaxScreenWidth * MaxScreenHeight]bool {
+	return &c.pixels
+}

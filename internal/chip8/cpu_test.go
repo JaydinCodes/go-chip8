@@ -7,7 +7,7 @@ func stepN(t *testing.T, cpu *CPU, n int) {
 	t.Helper()
 
 	for i := 0; i < n; i++ {
-		if _, err := cpu.Step(); err != nil {
+		if err := cpu.Step(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,9 +136,8 @@ func TestCallAndReturn(t *testing.T) {
 func TestClearScreen(t *testing.T) {
 	cpu := New()
 
-	cpu.Display[0] = true
-	cpu.Display[10] = true
-	cpu.DisplayDirty = false
+	cpu.pixels[0] = true
+	cpu.pixels[10] = true
 
 	program := []byte{
 		0x00, 0xE0, // clear screen
@@ -150,14 +149,10 @@ func TestClearScreen(t *testing.T) {
 
 	stepN(t, cpu, 1)
 
-	for i, pixel := range cpu.Display {
+	for i, pixel := range cpu.pixels {
 		if pixel {
 			t.Fatalf("expected display[%d] to be false", i)
 		}
-	}
-
-	if !cpu.DisplayDirty {
-		t.Fatal("expected DisplayDirty to be true after clearing screen")
 	}
 }
 
@@ -757,18 +752,14 @@ func TestDXYNDrawSinglePixelSprite(t *testing.T) {
 
 	stepN(t, cpu, 4)
 
-	index := 5*screenWidth + 10
+	index := 5*MaxScreenWidth + 10
 
-	if !cpu.Display[index] {
+	if !cpu.pixels[index] {
 		t.Fatalf("expected pixel at (10, 5) to be on")
 	}
 
 	if cpu.V[0xF] != 0 {
 		t.Fatalf("expected VF to be 0 when no collision happens, got %d", cpu.V[0xF])
-	}
-
-	if !cpu.DisplayDirty {
-		t.Fatal("expected DisplayDirty to be true after drawing")
 	}
 }
 
@@ -791,27 +782,27 @@ func TestDXYNDrawFullByteSprite(t *testing.T) {
 	stepN(t, cpu, 4)
 
 	onPixels := []int{
-		3*screenWidth + 4,
-		3*screenWidth + 5,
-		3*screenWidth + 6,
-		3*screenWidth + 7,
+		3*MaxScreenWidth + 4,
+		3*MaxScreenWidth + 5,
+		3*MaxScreenWidth + 6,
+		3*MaxScreenWidth + 7,
 	}
 
 	offPixels := []int{
-		3*screenWidth + 8,
-		3*screenWidth + 9,
-		3*screenWidth + 10,
-		3*screenWidth + 11,
+		3*MaxScreenWidth + 8,
+		3*MaxScreenWidth + 9,
+		3*MaxScreenWidth + 10,
+		3*MaxScreenWidth + 11,
 	}
 
 	for _, index := range onPixels {
-		if !cpu.Display[index] {
+		if !cpu.pixels[index] {
 			t.Fatalf("expected display[%d] to be on", index)
 		}
 	}
 
 	for _, index := range offPixels {
-		if cpu.Display[index] {
+		if cpu.pixels[index] {
 			t.Fatalf("expected display[%d] to be off", index)
 		}
 	}
@@ -838,13 +829,13 @@ func TestDXYNDrawMultiRowSprite(t *testing.T) {
 	stepN(t, cpu, 4)
 
 	expectedPixels := []int{
-		4*screenWidth + 2,
-		5*screenWidth + 3,
-		6*screenWidth + 4,
+		4*MaxScreenWidth + 2,
+		5*MaxScreenWidth + 3,
+		6*MaxScreenWidth + 4,
 	}
 
 	for _, index := range expectedPixels {
-		if !cpu.Display[index] {
+		if !cpu.pixels[index] {
 			t.Fatalf("expected display[%d] to be on", index)
 		}
 	}
@@ -873,9 +864,9 @@ func TestDXYNDrawSpriteCollision(t *testing.T) {
 
 	stepN(t, cpu, 4)
 
-	index := 5*screenWidth + 10
+	index := 5*MaxScreenWidth + 10
 
-	if !cpu.Display[index] {
+	if !cpu.pixels[index] {
 		t.Fatalf("expected pixel to be on after first draw")
 	}
 
@@ -885,7 +876,7 @@ func TestDXYNDrawSpriteCollision(t *testing.T) {
 
 	stepN(t, cpu, 1)
 
-	if cpu.Display[index] {
+	if cpu.pixels[index] {
 		t.Fatalf("expected pixel to be off after second draw")
 	}
 
@@ -915,13 +906,13 @@ func TestDXYNDrawSpriteWrapsAroundScreen(t *testing.T) {
 	stepN(t, cpu, 4)
 
 	expectedPixels := []int{
-		31*screenWidth + 63, // first row, x = 63
-		31*screenWidth + 0,  // first row wraps to x = 0
-		0*screenWidth + 63,  // second row wraps to y = 0
+		31*MaxScreenWidth + 63, // first row, x = 63
+		31*MaxScreenWidth + 0,  // first row wraps to x = 0
+		0*MaxScreenWidth + 63,  // second row wraps to y = 0
 	}
 
 	for _, index := range expectedPixels {
-		if !cpu.Display[index] {
+		if !cpu.pixels[index] {
 			t.Fatalf("expected display[%d] to be on", index)
 		}
 	}
