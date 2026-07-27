@@ -634,3 +634,35 @@ func (c *CPU) scrollDown(n int) {
 		}
 	}
 }
+
+func (c *CPU) scrollRight() {
+	width := c.DisplayWidth()
+	height := c.DisplayHeight()
+	const shiftAmount = 4
+	for y := 0; y < height; y++ {
+		for x := width - 1; x >= shiftAmount; x-- {
+			c.pixels[y*MaxScreenWidth+x] = c.pixels[y*MaxScreenWidth+(x-shiftAmount)]
+		}
+	}
+}
+
+func (c *CPU) scrollLeft() {
+	width := c.DisplayWidth()
+	height := c.DisplayHeight()
+	const shiftAmount = 4
+
+	for y := 0; y < height; y++ {
+		// move pixels left from left to right
+		for x := 0; x < width-shiftAmount; x++ {
+			c.pixels[y*MaxScreenWidth+x] = c.pixels[y*MaxScreenWidth+(x+shiftAmount)]
+
+		}
+
+		// clear the right 4 coloumns
+		for x := width - shiftAmount; x < width; x++ {
+			if x >= 0 {
+				c.pixels[y*MaxScreenWidth+x] = false
+			}
+		}
+	}
+}
