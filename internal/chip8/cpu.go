@@ -118,8 +118,10 @@ func (c *CPU) Execute(opcode uint16) error {
 	switch opcode & 0xF000 {
 	case 0x0000: // 0x00E0: Clear the display
 		switch opcode {
+		
 		case 0x00C0:
-
+			lines := int(opcode & 0x000F)
+			c.scrollDown(lines)
 		case 0x00E0:
 			c.clearScreen()
 		case 0x00EE: // Return from subroutine
@@ -131,7 +133,15 @@ func (c *CPU) Execute(opcode uint16) error {
 			c.Hires = true
 			c.clearScreen()
 
-		default:
+		case 0x00FB:
+			c.scrollRight()
+			return nil
+
+		case 0x00FC:
+			c.scrollLeft()
+			return nil
+	
+		:
 			return fmt.Errorf("unknown 0x0000 opcode: 0x%04X", opcode)
 		}
 	case 0x1000: // 0x1NNN: Jump to address NNN
