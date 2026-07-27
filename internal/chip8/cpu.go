@@ -38,6 +38,7 @@ type CPU struct {
 	SP    byte       // Stack pointer
 
 	Hires  bool
+	Halted bool
 	pixels [MaxScreenWidth * MaxScreenHeight]bool
 
 	DelayTimer byte
@@ -56,6 +57,7 @@ func NewWithQuirks(q Quirks) *CPU {
 		PC:     ProgramStart,
 		Quirks: q,
 		Hires:  false,
+		Halted: false,
 	}
 
 	copy(cpu.Memory[FontStart:], fontSet[:])
@@ -94,17 +96,16 @@ func (c *CPU) Fetch() (uint16, error) {
 	return opcode, nil
 }
 
-func (c *CPU) Step() (uint16, error) {
-	opcode, err := c.Fetch()
-	if err != nil {
-		return 0, err
+func (c *CPU) Step() error {
+	if c.Halted {
+		return nil
 	}
 
-	if err := c.Execute(opcode); err != nil {
-		return 0, err
-	}
+	opcode := uint16(c.Memory[c.PC])<<8 | uint16(c.Memory[c.PC+1])
+	c.PC += 2
 
-	return opcode, nil
+	return c.Execute(opcode)
+
 }
 
 func (c *CPU) Execute(opcode uint16) error {
@@ -117,31 +118,39 @@ func (c *CPU) Execute(opcode uint16) error {
 	// Decode and execute the opcode
 	switch opcode & 0xF000 {
 	case 0x0000: // 0x00E0: Clear the display
-		switch opcode {
-		
-		case 0x00C0:
+		switch opcode & 0xFFF0 {
+		case 0x00C0: // 00CN: Scroll down N lines
 			lines := int(opcode & 0x000F)
 			c.scrollDown(lines)
-		case 0x00E0:
-			c.clearScreen()
-		case 0x00EE: // Return from subroutine
-			return c.ret()
-		case 0x00FE:
-			c.Hires = false
-			c.clearScreen()
-		case 0x00FF:
-			c.Hires = true
-			c.clearScreen()
 
-		case 0x00FB:
-			c.scrollRight()
-			return nil
+		case 0x00E0: // 00E0 or 00EE
+			if opcode == 0x00E0 {
+				c.clearScreen()
+			} else if opcode == 0x00EE {
+				return c.ret()
+			} else {
+				return fmt.Errorf("unknown 0x0000 opcode: 0x%04X", opcode)
+			}
 
-		case 0x00FC:
-			c.scrollLeft()
-			return nil
-	
-		:
+		case 0x00F0: // 00FB, 00FC, 00FE, 00FF
+			switch opcode {
+			case 0x00FB:
+				c.scrollRight()
+			case 0x00FC:
+				c.scrollLeft()
+			case 0x00FD:
+				c.Halted = true
+			case 0x00FE:
+				c.Hires = false
+				c.clearScreen()
+			case 0x00FF:
+				c.Hires = true
+				c.clearScreen()
+			default:
+				return fmt.Errorf("unknown 0x0000 opcode: 0x%04X", opcode)
+			}
+
+		default:
 			return fmt.Errorf("unknown 0x0000 opcode: 0x%04X", opcode)
 		}
 	case 0x1000: // 0x1NNN: Jump to address NNN
