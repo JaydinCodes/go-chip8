@@ -118,6 +118,8 @@ func (c *CPU) Execute(opcode uint16) error {
 	switch opcode & 0xF000 {
 	case 0x0000: // 0x00E0: Clear the display
 		switch opcode {
+		case 0x00C0:
+
 		case 0x00E0:
 			c.clearScreen()
 		case 0x00EE: // Return from subroutine
@@ -611,5 +613,24 @@ func NewSuperChipProfile() Quirks {
 		JumpUsesVX:        true,
 		IndexOverFlowsVF:  false,
 		LogicResetsVF:     false,
+	}
+}
+
+func (c *CPU) scrollDown(n int) {
+	width := c.DisplayWidth()
+	height := c.DisplayHeight()
+
+	// move rows down from bottom to top
+	for y := height - 1; y >= n; y-- {
+		for x := 0; x < width; x++ {
+			c.pixels[y*MaxScreenWidth+x] = c.pixels[(y-n)*MaxScreenWidth]
+		}
+	}
+
+	// blank out the newly exposed top rows
+	for y := 0; y < n && y < height; y++ {
+		for x := 0; x < width; x++ {
+			c.pixels[y*MaxScreenWidth+x] = false
+		}
 	}
 }
