@@ -66,6 +66,7 @@ func NewWithQuirks(q Quirks) *CPU {
 func New() *CPU {
 	return NewWithQuirks(NewSuperChipProfile())
 }
+
 func (c *CPU) LoadProgram(program []byte) error {
 	if len(program) > MemorySize-ProgramStart {
 		return fmt.Errorf("program size exceeds available memory: %d", len(program))
@@ -121,6 +122,12 @@ func (c *CPU) Execute(opcode uint16) error {
 			c.clearScreen()
 		case 0x00EE: // Return from subroutine
 			return c.ret()
+		case 0x00FE:
+			c.Hires = false
+			c.clearScreen()
+		case 0x00FF:
+			c.Hires = true
+			c.clearScreen()
 
 		default:
 			return fmt.Errorf("unknown 0x0000 opcode: 0x%04X", opcode)
